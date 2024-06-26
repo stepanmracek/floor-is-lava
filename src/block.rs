@@ -20,10 +20,13 @@ impl Plugin for BlocksPlugin {
 }
 
 #[derive(Resource)]
-struct BlockTextures {
-    gray: HashMap<u8, Handle<Image>>,
-    red: HashMap<u8, Handle<Image>>,
-    blue: HashMap<u8, Handle<Image>>,
+struct BlockMesh(Handle<Mesh>);
+
+#[derive(Resource)]
+struct BlockMaterials {
+    gray: HashMap<u8, Handle<StandardMaterial>>,
+    red: HashMap<u8, Handle<StandardMaterial>>,
+    blue: HashMap<u8, Handle<StandardMaterial>>,
 }
 
 #[derive(Component, Debug)]
@@ -61,8 +64,9 @@ fn blocks_init(
     mut materials: ResMut<Assets<StandardMaterial>>,
     asset_server: Res<AssetServer>,
 ) {
+    let mesh_handle = meshes.add(create_block_mesh());
     let mut blocks = Blocks::default();
-    let block_textures = BlockTextures::load(&asset_server);
+    let block_textures = BlockMaterials::load(&asset_server, &mut materials);
     let mut rng = rand::thread_rng();
     for y in 0..=3 {
         for x in -3..=3 {
@@ -73,15 +77,16 @@ fn blocks_init(
                     x,
                     y,
                     &block_textures,
-                    &mut meshes,
-                    &mut materials,
+                    mesh_handle.clone_weak(),
                     &mut commands,
                     &mut blocks,
                 );
             }
         }
     }
+
     commands.insert_resource(block_textures);
+    commands.insert_resource(BlockMesh(mesh_handle));
     commands.insert_resource(blocks);
 }
 
@@ -105,9 +110,8 @@ fn block_in_lava(
 fn block_generator(
     mut commands: Commands,
     mut blocks: ResMut<Blocks>,
-    block_textures: ResMut<BlockTextures>,
-    mut meshes: ResMut<Assets<Mesh>>,
-    mut materials: ResMut<Assets<StandardMaterial>>,
+    mesh: Res<BlockMesh>,
+    block_materials: Res<BlockMaterials>,
     lava: Query<&Transform, With<Lava>>,
 ) {
     if let Ok(lava) = lava.get_single() {
@@ -122,9 +126,8 @@ fn block_generator(
                             block_val,
                             x,
                             max_y + 1,
-                            &block_textures,
-                            &mut meshes,
-                            &mut materials,
+                            &block_materials,
+                            mesh.0.clone_weak(),
                             &mut commands,
                             &mut blocks,
                         );
@@ -135,22 +138,31 @@ fn block_generator(
     }
 }
 
-impl BlockTextures {
-    fn load_color(asset_server: &Res<AssetServer>, color: &str) -> HashMap<u8, Handle<Image>> {
+impl BlockMaterials {
+    fn load_color(
+        asset_server: &Res<AssetServer>,
+        materials: &mut Assets<StandardMaterial>,
+        color: &str,
+    ) -> HashMap<u8, Handle<StandardMaterial>> {
         (1..=9)
             .map(|val| {
                 (
                     val,
-                    asset_server.load(format!("textures/block-{val}-{color}.png")),
+                    materials.add(StandardMaterial {
+                        base_color_texture: Some(
+                            asset_server.load(format!("textures/block-{val}-{color}.png")),
+                        ),
+                        ..default()
+                    }),
                 )
             })
             .collect()
     }
-    fn load(asset_server: &Res<AssetServer>) -> Self {
-        BlockTextures {
-            gray: BlockTextures::load_color(asset_server, "gray"),
-            red: BlockTextures::load_color(asset_server, "red"),
-            blue: BlockTextures::load_color(asset_server, "blue"),
+    fn load(asset_server: &Res<AssetServer>, materials: &mut Assets<StandardMaterial>) -> Self {
+        BlockMaterials {
+            gray: BlockMaterials::load_color(asset_server, materials, "gray"),
+            red: BlockMaterials::load_color(asset_server, materials, "red"),
+            blue: BlockMaterials::load_color(asset_server, materials, "blue"),
         }
     }
 }
@@ -160,23 +172,20 @@ impl BlockBundle {
         value: u8,
         x: i32,
         y: i32,
-        block_textures: &BlockTextures,
-        meshes: &mut Assets<Mesh>,
-        materials: &mut Assets<StandardMaterial>,
+        block_materials: &BlockMaterials,
+        mesh: Handle<Mesh>,
         commands: &mut Commands,
         blocks: &mut Blocks,
     ) {
+        let material = block_materials.gray[&value].clone_weak();
         let entity = commands
             .spawn(BlockBundle {
                 color: BlockColor::Gray,
                 value: BlockValue(value),
                 position: BlockPosition { x, y },
                 pbr: PbrBundle {
-                    mesh: meshes.add(create_block_mesh()),
-                    material: materials.add(StandardMaterial {
-                        base_color_texture: Some(block_textures.gray[&value].clone()),
-                        ..default()
-                    }),
+                    mesh,
+                    material,
                     transform: Transform::from_xyz(x as f32, y as f32, -y as f32),
                     ..default()
                 },
