@@ -15,7 +15,7 @@ pub struct BlocksPlugin;
 impl Plugin for BlocksPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(Startup, blocks_init);
-        app.add_systems(Update, block_in_lava);
+        app.add_systems(Update, (block_in_lava, block_generator));
     }
 }
 
@@ -64,7 +64,7 @@ fn blocks_init(
     let mut blocks = Blocks::default();
     let block_textures = BlockTextures::load(&asset_server);
     let mut rng = rand::thread_rng();
-    for y in 0..=20 {
+    for y in 0..=3 {
         for x in -3..=3 {
             if rng.gen::<f32>() < 0.7 || (x == 1 && y == 3) || (x == -1 && y == 3) {
                 let block_val = rng.gen_range(1u8..=9u8);
@@ -81,6 +81,7 @@ fn blocks_init(
             }
         }
     }
+    commands.insert_resource(block_textures);
     commands.insert_resource(blocks);
 }
 
@@ -96,6 +97,39 @@ fn block_in_lava(
                 debug!("Removing {color:?} cube at {transform:?} worth of {value:?}");
                 blocks.coords.remove(&(position.x, position.y));
                 commands.entity(entity).despawn();
+            }
+        }
+    }
+}
+
+fn block_generator(
+    mut commands: Commands,
+    mut blocks: ResMut<Blocks>,
+    block_textures: ResMut<BlockTextures>,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut materials: ResMut<Assets<StandardMaterial>>,
+    lava: Query<&Transform, With<Lava>>,
+) {
+    if let Ok(lava) = lava.get_single() {
+        let max_y = blocks.coords.iter().map(|((_x, y), _ent)| y).max();
+        if let Some(&max_y) = max_y {
+            if ((max_y - 5) as f32) < lava.translation.y {
+                let mut rng = rand::thread_rng();
+                for x in -3..=3 {
+                    if rng.gen::<f32>() < 0.7 {
+                        let block_val = rng.gen_range(1u8..=9u8);
+                        BlockBundle::spawn(
+                            block_val,
+                            x,
+                            max_y + 1,
+                            &block_textures,
+                            &mut meshes,
+                            &mut materials,
+                            &mut commands,
+                            &mut blocks,
+                        );
+                    }
+                }
             }
         }
     }
