@@ -1,9 +1,158 @@
-use bevy::render::{
-    mesh::{Indices, Mesh, PrimitiveTopology},
-    render_asset::RenderAssetUsages,
+use bevy::{
+    prelude::*,
+    render::{
+        mesh::{Indices, PrimitiveTopology},
+        render_asset::RenderAssetUsages,
+    },
 };
+use rand::prelude::*;
+use std::collections::HashMap;
 
-pub fn create_block_mesh() -> Mesh {
+use crate::Lava;
+
+pub struct BlocksPlugin;
+
+impl Plugin for BlocksPlugin {
+    fn build(&self, app: &mut App) {
+        app.add_systems(Startup, blocks_init);
+        app.add_systems(Update, block_in_lava);
+    }
+}
+
+#[derive(Resource)]
+struct BlockTextures {
+    gray: HashMap<u8, Handle<Image>>,
+    red: HashMap<u8, Handle<Image>>,
+    blue: HashMap<u8, Handle<Image>>,
+}
+
+#[derive(Component, Debug)]
+enum BlockColor {
+    Gray,
+    Red,
+    Blue,
+}
+
+#[derive(Component, Debug)]
+struct BlockPosition {
+    x: i32,
+    y: i32,
+}
+
+#[derive(Component, Debug)]
+struct BlockValue(u8);
+
+#[derive(Bundle)]
+struct BlockBundle {
+    color: BlockColor,
+    value: BlockValue,
+    position: BlockPosition,
+    pbr: PbrBundle,
+}
+
+#[derive(Resource, Default)]
+struct Blocks {
+    coords: HashMap<(i32, i32), Entity>,
+}
+
+fn blocks_init(
+    mut commands: Commands,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut materials: ResMut<Assets<StandardMaterial>>,
+    asset_server: Res<AssetServer>,
+) {
+    let mut blocks = Blocks::default();
+    let block_textures = BlockTextures::load(&asset_server);
+    let mut rng = rand::thread_rng();
+    for y in 0..=20 {
+        for x in -3..=3 {
+            if rng.gen::<f32>() < 0.7 || (x == 1 && y == 3) || (x == -1 && y == 3) {
+                let block_val = rng.gen_range(1u8..=9u8);
+                BlockBundle::spawn(
+                    block_val,
+                    x,
+                    y,
+                    &block_textures,
+                    &mut meshes,
+                    &mut materials,
+                    &mut commands,
+                    &mut blocks,
+                );
+            }
+        }
+    }
+    commands.insert_resource(blocks);
+}
+
+fn block_in_lava(
+    mut commands: Commands,
+    mut blocks: ResMut<Blocks>,
+    lava: Query<&Transform, With<Lava>>,
+    blocks_query: Query<(Entity, &BlockValue, &BlockColor, &Transform, &BlockPosition)>,
+) {
+    if let Ok(lava) = lava.get_single() {
+        for (entity, value, color, transform, position) in blocks_query.iter() {
+            if transform.translation.y < lava.translation.y - 0.5 {
+                debug!("Removing {color:?} cube at {transform:?} worth of {value:?}");
+                blocks.coords.remove(&(position.x, position.y));
+                commands.entity(entity).despawn();
+            }
+        }
+    }
+}
+
+impl BlockTextures {
+    fn load_color(asset_server: &Res<AssetServer>, color: &str) -> HashMap<u8, Handle<Image>> {
+        (1..=9)
+            .map(|val| {
+                (
+                    val,
+                    asset_server.load(format!("textures/block-{val}-{color}.png")),
+                )
+            })
+            .collect()
+    }
+    fn load(asset_server: &Res<AssetServer>) -> Self {
+        BlockTextures {
+            gray: BlockTextures::load_color(asset_server, "gray"),
+            red: BlockTextures::load_color(asset_server, "red"),
+            blue: BlockTextures::load_color(asset_server, "blue"),
+        }
+    }
+}
+
+impl BlockBundle {
+    fn spawn(
+        value: u8,
+        x: i32,
+        y: i32,
+        block_textures: &BlockTextures,
+        meshes: &mut Assets<Mesh>,
+        materials: &mut Assets<StandardMaterial>,
+        commands: &mut Commands,
+        blocks: &mut Blocks,
+    ) {
+        let entity = commands
+            .spawn(BlockBundle {
+                color: BlockColor::Gray,
+                value: BlockValue(value),
+                position: BlockPosition { x, y },
+                pbr: PbrBundle {
+                    mesh: meshes.add(create_block_mesh()),
+                    material: materials.add(StandardMaterial {
+                        base_color_texture: Some(block_textures.gray[&value].clone()),
+                        ..default()
+                    }),
+                    transform: Transform::from_xyz(x as f32, y as f32, -y as f32),
+                    ..default()
+                },
+            })
+            .id();
+        blocks.coords.insert((x, y), entity);
+    }
+}
+
+fn create_block_mesh() -> Mesh {
     Mesh::new(
         PrimitiveTopology::TriangleList,
         RenderAssetUsages::MAIN_WORLD | RenderAssetUsages::RENDER_WORLD,

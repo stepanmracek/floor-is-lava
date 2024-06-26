@@ -1,6 +1,7 @@
-use crate::utils;
 use bevy::prelude::*;
 use interpolation::{self, Ease};
+
+use crate::utils;
 
 pub struct PlayersPlugin;
 
@@ -20,7 +21,7 @@ fn players_init(mut commands: Commands, asset_server: Res<AssetServer>) {
         jump: asset_server.load("models/megarex/scene.gltf#Animation8"),
     });
 
-    for (player, x) in [(Player::Arrows, 3.0), (Player::Wasd, -3.0)] {
+    for (player, x) in [(Player::Arrows, 1.2), (Player::Wasd, -1.2)] {
         let scene = match player {
             Player::Arrows => asset_server.load("models/megarex/blue.gltf#Scene0"),
             Player::Wasd => asset_server.load("models/megarex/red.gltf#Scene0"),
@@ -205,28 +206,33 @@ fn control(
 
 fn movement(
     mut commands: Commands,
-    mut query: Query<
-        (
-            Entity,
-            &Speed,
-            &mut Transform,
-            &Moving,
-            &AnimationPlayerEntity,
-        ),
-        With<Player>,
-    >,
+    mut query: Query<(
+        Entity,
+        &Speed,
+        &mut Transform,
+        &Moving,
+        &AnimationPlayerEntity,
+        &Player,
+    )>,
     mut animation_player: Query<&mut AnimationPlayer>,
     time: Res<Time>,
     animations: Res<PlayerAnimations>,
 ) {
-    for (entity, speed, mut transform, moving, animation_player_entity) in query.iter_mut() {
+    for (entity, speed, mut transform, moving, animation_player_entity, player) in query.iter_mut()
+    {
         let moving_duration = time.elapsed_seconds() - moving.start_time;
         let moving_progress = moving_duration * speed.0;
 
         if moving_progress >= 1.0 {
+            transform.translation = moving.target;
+
             commands.entity(entity).remove::<Moving>().insert(Idle);
             let mut animation_player = animation_player.get_mut(animation_player_entity.0).unwrap();
             animation_player.play(animations.idle.clone_weak()).repeat();
+            let x = transform.translation.x.round() as i32;
+            let y = transform.translation.y.round() as i32;
+
+            info!("{:?} -> ({};{})", player, x, y);
         } else {
             let s = moving_progress.cubic_in_out();
             transform.translation = moving.source.lerp(moving.target, s);

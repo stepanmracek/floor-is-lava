@@ -12,7 +12,7 @@ fn main() {
             color: Color::ORANGE_RED,
             brightness: 100.,
         })
-        .add_plugins((DefaultPlugins, player::PlayersPlugin))
+        .add_plugins((DefaultPlugins, player::PlayersPlugin, block::BlocksPlugin))
         .add_systems(Startup, setup)
         .add_systems(Update, (raising_lava, camera_follow))
         .run();
@@ -27,15 +27,13 @@ fn setup(
     mut materials: ResMut<Assets<StandardMaterial>>,
     asset_server: Res<AssetServer>,
 ) {
-    let block_texture: Handle<Image> = asset_server.load("textures/cube.png");
-    let lava_texture: Handle<Image> = asset_server.load("textures/lava.png");
-
     // lava
     commands.spawn((
         PbrBundle {
             mesh: meshes.add(Circle::new(10.0)),
             material: materials.add(StandardMaterial {
-                base_color_texture: Some(lava_texture),
+                base_color_texture: Some(asset_server.load("textures/lava.png")),
+                alpha_mode: AlphaMode::Blend,
                 ..default()
             }),
             transform: Transform::from_rotation(Quat::from_rotation_x(-FRAC_PI_2)),
@@ -43,21 +41,6 @@ fn setup(
         },
         Lava,
     ));
-
-    // cubes
-    for y in 0..=20 {
-        for x in -3..=3 {
-            commands.spawn(PbrBundle {
-                mesh: meshes.add(block::create_block_mesh()),
-                material: materials.add(StandardMaterial {
-                    base_color_texture: Some(block_texture.clone()),
-                    ..default()
-                }),
-                transform: Transform::from_xyz(x as f32, y as f32, -y as f32),
-                ..default()
-            });
-        }
-    }
 
     // light
     commands.spawn(DirectionalLightBundle {
