@@ -23,10 +23,10 @@ impl Plugin for BlocksPlugin {
 struct BlockMesh(Handle<Mesh>);
 
 #[derive(Resource)]
-struct BlockMaterials {
+pub struct BlockMaterials {
     gray: HashMap<u8, Handle<StandardMaterial>>,
-    red: HashMap<u8, Handle<StandardMaterial>>,
-    blue: HashMap<u8, Handle<StandardMaterial>>,
+    pub red: HashMap<u8, Handle<StandardMaterial>>,
+    pub blue: HashMap<u8, Handle<StandardMaterial>>,
 }
 
 #[derive(Component, Debug)]
@@ -43,7 +43,7 @@ struct BlockPosition {
 }
 
 #[derive(Component, Debug)]
-struct BlockValue(u8);
+pub struct BlockValue(pub u8);
 
 #[derive(Bundle)]
 struct BlockBundle {
@@ -54,8 +54,8 @@ struct BlockBundle {
 }
 
 #[derive(Resource, Default)]
-struct Blocks {
-    coords: HashMap<(i32, i32), Entity>,
+pub struct Blocks {
+    pub coords: HashMap<(i32, i32), Entity>,
 }
 
 fn blocks_init(

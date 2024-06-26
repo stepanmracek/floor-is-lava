@@ -1,6 +1,7 @@
 use bevy::prelude::*;
 use interpolation::{self, Ease};
 
+use crate::block;
 use crate::utils;
 
 pub struct PlayersPlugin;
@@ -215,8 +216,12 @@ fn movement(
         &Player,
     )>,
     mut animation_player: Query<&mut AnimationPlayer>,
+    mut material_query: Query<&mut Handle<StandardMaterial>>,
+    block_query: Query<&block::BlockValue>,
     time: Res<Time>,
     animations: Res<PlayerAnimations>,
+    blocks: Res<block::Blocks>,
+    block_materials: Res<block::BlockMaterials>,
 ) {
     for (entity, speed, mut transform, moving, animation_player_entity, player) in query.iter_mut()
     {
@@ -230,12 +235,45 @@ fn movement(
             let mut animation_player = animation_player.get_mut(animation_player_entity.0).unwrap();
             animation_player.play(animations.idle.clone_weak()).repeat();
             let x = transform.translation.x.round() as i32;
-            let y = transform.translation.y.round() as i32;
+            let y = (transform.translation.y - 0.5).round() as i32;
 
-            info!("{:?} -> ({};{})", player, x, y);
+            if let Some(block_entity) = blocks.coords.get(&(x, y)) {
+                color_block(
+                    &block_query,
+                    block_entity,
+                    player,
+                    x,
+                    y,
+                    &mut material_query,
+                    &block_materials,
+                );
+            } else {
+                // TODO: step outside -> fall
+            }
         } else {
             let s = moving_progress.cubic_in_out();
             transform.translation = moving.source.lerp(moving.target, s);
         }
+    }
+}
+
+fn color_block(
+    block_query: &Query<&block::BlockValue>,
+    block_entity: &Entity,
+    player: &Player,
+    x: i32,
+    y: i32,
+    material_query: &mut Query<&mut Handle<StandardMaterial>>,
+    block_materials: &Res<block::BlockMaterials>,
+) {
+    let block_value = block_query.get(*block_entity).unwrap();
+    debug!("{player:?} -> ({x};{y}) value: {block_value:?}");
+    if let Ok(mut block_material) = material_query.get_mut(*block_entity) {
+        debug!("{block_material:?}");
+        let new_material = match player {
+            Player::Wasd => block_materials.red[&block_value.0].clone_weak(),
+            Player::Arrows => block_materials.blue[&block_value.0].clone_weak(),
+        };
+        *block_material = new_material;
     }
 }
