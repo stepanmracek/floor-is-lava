@@ -31,7 +31,7 @@ pub struct BlockMaterials {
 }
 
 #[derive(Component, Debug)]
-enum BlockColor {
+pub enum BlockColor {
     Gray,
     Red,
     Blue,

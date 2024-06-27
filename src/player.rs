@@ -244,7 +244,7 @@ fn movement(
     )>,
     mut animation_player: Query<&mut AnimationPlayer>,
     mut material_query: Query<&mut Handle<StandardMaterial>>,
-    block_query: Query<&block::BlockValue>,
+    mut block_query: Query<(&block::BlockValue, &mut block::BlockColor)>,
     time: Res<Time>,
     animations: Res<PlayerAnimations>,
     blocks: Res<block::Blocks>,
@@ -266,7 +266,7 @@ fn movement(
                 animation_player.play(animations.idle.clone_weak()).repeat();
 
                 color_block(
-                    &block_query,
+                    &mut block_query,
                     block_entity,
                     player,
                     x,
@@ -288,7 +288,7 @@ fn movement(
 }
 
 fn color_block(
-    block_query: &Query<&block::BlockValue>,
+    block_query: &mut Query<(&block::BlockValue, &mut block::BlockColor)>,
     block_entity: &Entity,
     player: &Player,
     x: i32,
@@ -296,15 +296,22 @@ fn color_block(
     material_query: &mut Query<&mut Handle<StandardMaterial>>,
     block_materials: &Res<block::BlockMaterials>,
 ) {
-    let block_value = block_query.get(*block_entity).unwrap();
+    let (block_value, mut block_color) = block_query.get_mut(*block_entity).unwrap();
     info!("{player:?} -> ({x};{y}) value: {block_value:?}");
     if let Ok(mut block_material) = material_query.get_mut(*block_entity) {
         debug!("{block_material:?}");
-        let new_material = match player {
-            Player::Wasd => block_materials.red[&block_value.0].clone_weak(),
-            Player::Arrows => block_materials.blue[&block_value.0].clone_weak(),
+        let (new_material, new_color) = match player {
+            Player::Wasd => (
+                block_materials.red[&block_value.0].clone_weak(),
+                block::BlockColor::Red,
+            ),
+            Player::Arrows => (
+                block_materials.blue[&block_value.0].clone_weak(),
+                block::BlockColor::Blue,
+            ),
         };
         *block_material = new_material;
+        *block_color = new_color;
     }
 }
 
