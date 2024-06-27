@@ -31,11 +31,7 @@ pub struct BlockMaterials {
 }
 
 #[derive(Component, Debug)]
-pub enum BlockColor {
-    Gray,
-    Red,
-    Blue,
-}
+pub struct BlockOwner(pub Option<Entity>);
 
 #[derive(Component, Debug)]
 struct BlockPosition {
@@ -48,7 +44,7 @@ pub struct BlockValue(pub u8);
 
 #[derive(Bundle)]
 struct BlockBundle {
-    color: BlockColor,
+    owner: BlockOwner,
     value: BlockValue,
     position: BlockPosition,
     pbr: PbrBundle,
@@ -98,15 +94,24 @@ fn blocks_init(
 fn block_in_lava(
     mut commands: Commands,
     mut blocks: ResMut<Blocks>,
+    mut score_query: Query<&mut player::Score>,
     lava: Query<&Transform, With<Lava>>,
-    blocks_query: Query<(Entity, &BlockValue, &BlockColor, &Transform, &BlockPosition)>,
+    blocks_query: Query<(Entity, &BlockValue, &BlockOwner, &Transform, &BlockPosition)>,
 ) {
     if let Ok(lava) = lava.get_single() {
-        for (entity, value, color, transform, position) in blocks_query.iter() {
+        for (entity, value, owner, transform, position) in blocks_query.iter() {
             if transform.translation.y < lava.translation.y - 0.5 {
-                debug!("Removing {color:?} cube at {transform:?} worth of {value:?}");
                 blocks.coords.remove(&(position.x, position.y));
                 commands.entity(entity).despawn();
+                if let Some(owner) = owner.0 {
+                    debug!(
+                        "Removing cube at {transform:?} belonging to {owner:?} worth of {value:?}"
+                    );
+                    if let Ok(mut score) = score_query.get_mut(owner) {
+                        (*score).0 += value.0 as u32;
+                        info!("{owner:?} score: {}", score.0)
+                    }
+                }
             }
         }
     }
@@ -185,7 +190,7 @@ impl BlockBundle {
         let material = block_materials.gray[&value].clone_weak();
         let entity = commands
             .spawn(BlockBundle {
-                color: BlockColor::Gray,
+                owner: BlockOwner(None),
                 value: BlockValue(value),
                 position: BlockPosition { x, y },
                 pbr: PbrBundle {

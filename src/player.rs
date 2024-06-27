@@ -60,6 +60,7 @@ fn players_init(mut commands: Commands, asset_server: Res<AssetServer>) {
                         },
                         ..Default::default()
                     },
+                    score: Score(0),
                 },
                 Idle,
             ))
@@ -128,11 +129,15 @@ struct Dying {
 #[derive(Component)]
 struct AnimationPlayerEntity(Entity);
 
+#[derive(Component)]
+pub struct Score(pub u32);
+
 #[derive(Bundle)]
 struct PlayerBundle {
     scene: SceneBundle,
     player: Player,
     speed: Speed,
+    score: Score,
 }
 
 enum Direction {
@@ -244,13 +249,14 @@ fn movement(
     )>,
     mut animation_player: Query<&mut AnimationPlayer>,
     mut material_query: Query<&mut Handle<StandardMaterial>>,
-    mut block_query: Query<(&block::BlockValue, &mut block::BlockColor)>,
+    mut owner_query: Query<(&block::BlockValue, &mut block::BlockOwner)>,
     time: Res<Time>,
     animations: Res<PlayerAnimations>,
     blocks: Res<block::Blocks>,
     block_materials: Res<block::BlockMaterials>,
 ) {
-    for (entity, speed, mut transform, moving, animation_player_entity, player) in query.iter_mut()
+    for (player_entity, speed, mut transform, moving, animation_player_entity, player) in
+        query.iter_mut()
     {
         let moving_duration = time.elapsed_seconds() - moving.start_time;
         let moving_progress = moving_duration * speed.0;
@@ -262,12 +268,16 @@ fn movement(
             let y = (transform.translation.y - 0.5).round() as i32;
             let mut animation_player = animation_player.get_mut(animation_player_entity.0).unwrap();
             if let Some(block_entity) = blocks.coords.get(&(x, y)) {
-                commands.entity(entity).remove::<Moving>().insert(Idle);
+                commands
+                    .entity(player_entity)
+                    .remove::<Moving>()
+                    .insert(Idle);
                 animation_player.play(animations.idle.clone_weak()).repeat();
 
                 color_block(
-                    &mut block_query,
-                    block_entity,
+                    &mut owner_query,
+                    &block_entity,
+                    &player_entity,
                     player,
                     x,
                     y,
@@ -277,7 +287,10 @@ fn movement(
             } else {
                 // TODO: step outside -> fall
                 info!("{player:?} is falling!");
-                commands.entity(entity).remove::<Moving>().insert(Falling);
+                commands
+                    .entity(player_entity)
+                    .remove::<Moving>()
+                    .insert(Falling);
                 animation_player.play(animations.falling.clone_weak());
             }
         } else {
@@ -288,30 +301,25 @@ fn movement(
 }
 
 fn color_block(
-    block_query: &mut Query<(&block::BlockValue, &mut block::BlockColor)>,
+    owner_query: &mut Query<(&block::BlockValue, &mut block::BlockOwner)>,
     block_entity: &Entity,
+    player_entity: &Entity,
     player: &Player,
     x: i32,
     y: i32,
     material_query: &mut Query<&mut Handle<StandardMaterial>>,
     block_materials: &Res<block::BlockMaterials>,
 ) {
-    let (block_value, mut block_color) = block_query.get_mut(*block_entity).unwrap();
-    info!("{player:?} -> ({x};{y}) value: {block_value:?}");
+    let (block_value, mut block_owner) = owner_query.get_mut(*block_entity).unwrap();
+    info!("{player_entity:?} -> ({x};{y}) value: {block_value:?}");
     if let Ok(mut block_material) = material_query.get_mut(*block_entity) {
         debug!("{block_material:?}");
-        let (new_material, new_color) = match player {
-            Player::Wasd => (
-                block_materials.red[&block_value.0].clone_weak(),
-                block::BlockColor::Red,
-            ),
-            Player::Arrows => (
-                block_materials.blue[&block_value.0].clone_weak(),
-                block::BlockColor::Blue,
-            ),
+        let new_material = match player {
+            Player::Wasd => block_materials.red[&block_value.0].clone_weak(),
+            Player::Arrows => block_materials.blue[&block_value.0].clone_weak(),
         };
         *block_material = new_material;
-        *block_color = new_color;
+        *block_owner = block::BlockOwner(Some(*player_entity));
     }
 }
 
