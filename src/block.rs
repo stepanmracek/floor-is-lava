@@ -8,6 +8,7 @@ use bevy::{
 use rand::prelude::*;
 use std::collections::HashMap;
 
+use crate::player;
 use crate::Lava;
 
 pub struct BlocksPlugin;
@@ -68,9 +69,13 @@ fn blocks_init(
     let mut blocks = Blocks::default();
     let block_textures = BlockMaterials::load(&asset_server, &mut materials);
     let mut rng = rand::thread_rng();
+    let player_start_y = player::PLAYER_START_Y as i32;
     for y in 0..=3 {
         for x in -3..=3 {
-            if rng.gen::<f32>() < 0.7 || (x == 1 && y == 3) || (x == -1 && y == 3) {
+            if rng.gen::<f32>() < 0.7
+                || (x == player::ARROWS_PLAYER_START_POS_X as i32 && y == player_start_y)
+                || (x == player::WASD_PLAYER_START_POS_X as i32 && y == player_start_y)
+            {
                 let block_val = rng.gen_range(1u8..=9u8);
                 BlockBundle::spawn(
                     block_val,

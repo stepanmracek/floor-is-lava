@@ -1,28 +1,46 @@
 use bevy::prelude::*;
 use interpolation::{self, Ease};
+use rand::Rng;
 
 use crate::block;
 use crate::utils;
+use crate::Lava;
 
 pub struct PlayersPlugin;
 
 impl Plugin for PlayersPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(Startup, players_init);
-        app.add_systems(Update, (idle_init, control, movement));
+        app.add_systems(
+            Update,
+            (idle_init, control, movement, falling, lava_contact, dying),
+        );
     }
 }
+
+pub const PLAYER_START_Y: f32 = 3.0;
+pub const ARROWS_PLAYER_X_OFFSET: f32 = 0.2;
+pub const ARROWS_PLAYER_START_POS_X: f32 = 1.0;
+pub const WASD_PLAYER_X_OFFSET: f32 = -0.2;
+pub const WASD_PLAYER_START_POS_X: f32 = -1.0;
 
 fn players_init(mut commands: Commands, asset_server: Res<AssetServer>) {
     commands.insert_resource(PlayerAnimations {
         idle: asset_server.load("models/megarex/scene.gltf#Animation0"),
         run: asset_server.load("models/megarex/scene.gltf#Animation1"),
         win: asset_server.load("models/megarex/scene.gltf#Animation3"),
+        falling: asset_server.load("models/megarex/scene.gltf#Animation0"), // same as idle
         death: asset_server.load("models/megarex/scene.gltf#Animation7"),
         jump: asset_server.load("models/megarex/scene.gltf#Animation8"),
     });
 
-    for (player, x) in [(Player::Arrows, 1.2), (Player::Wasd, -1.2)] {
+    for (player, x) in [
+        (
+            Player::Arrows,
+            ARROWS_PLAYER_START_POS_X + ARROWS_PLAYER_X_OFFSET,
+        ),
+        (Player::Wasd, WASD_PLAYER_START_POS_X + WASD_PLAYER_X_OFFSET),
+    ] {
         let scene = match player {
             Player::Arrows => asset_server.load("models/megarex/blue.gltf#Scene0"),
             Player::Wasd => asset_server.load("models/megarex/red.gltf#Scene0"),
@@ -55,6 +73,7 @@ struct PlayerAnimations {
     idle: Handle<AnimationClip>,
     run: Handle<AnimationClip>,
     win: Handle<AnimationClip>,
+    falling: Handle<AnimationClip>,
     death: Handle<AnimationClip>,
     jump: Handle<AnimationClip>,
 }
@@ -99,6 +118,14 @@ struct Moving {
 }
 
 #[derive(Component)]
+struct Falling;
+
+#[derive(Component)]
+struct Dying {
+    start_time: f32,
+}
+
+#[derive(Component)]
 struct AnimationPlayerEntity(Entity);
 
 #[derive(Bundle)]
@@ -125,7 +152,7 @@ fn control(
             &AnimationPlayerEntity,
             &Speed,
         ),
-        (With<Player>, With<Idle>),
+        With<Idle>,
     >,
     mut animation_player: Query<&mut AnimationPlayer>,
     keys: Res<ButtonInput<KeyCode>>,
@@ -231,13 +258,13 @@ fn movement(
         if moving_progress >= 1.0 {
             transform.translation = moving.target;
 
-            commands.entity(entity).remove::<Moving>().insert(Idle);
-            let mut animation_player = animation_player.get_mut(animation_player_entity.0).unwrap();
-            animation_player.play(animations.idle.clone_weak()).repeat();
             let x = transform.translation.x.round() as i32;
             let y = (transform.translation.y - 0.5).round() as i32;
-
+            let mut animation_player = animation_player.get_mut(animation_player_entity.0).unwrap();
             if let Some(block_entity) = blocks.coords.get(&(x, y)) {
+                commands.entity(entity).remove::<Moving>().insert(Idle);
+                animation_player.play(animations.idle.clone_weak()).repeat();
+
                 color_block(
                     &block_query,
                     block_entity,
@@ -249,6 +276,9 @@ fn movement(
                 );
             } else {
                 // TODO: step outside -> fall
+                info!("{player:?} is falling!");
+                commands.entity(entity).remove::<Moving>().insert(Falling);
+                animation_player.play(animations.falling.clone_weak());
             }
         } else {
             let s = moving_progress.cubic_in_out();
@@ -267,7 +297,7 @@ fn color_block(
     block_materials: &Res<block::BlockMaterials>,
 ) {
     let block_value = block_query.get(*block_entity).unwrap();
-    debug!("{player:?} -> ({x};{y}) value: {block_value:?}");
+    info!("{player:?} -> ({x};{y}) value: {block_value:?}");
     if let Ok(mut block_material) = material_query.get_mut(*block_entity) {
         debug!("{block_material:?}");
         let new_material = match player {
@@ -275,5 +305,75 @@ fn color_block(
             Player::Arrows => block_materials.blue[&block_value.0].clone_weak(),
         };
         *block_material = new_material;
+    }
+}
+
+fn falling(mut query: Query<&mut Transform, With<Falling>>, time: Res<Time>) {
+    for mut transform in query.iter_mut() {
+        transform.translation.y -= 5.0 * time.delta_seconds();
+    }
+}
+
+fn lava_contact(
+    mut commands: Commands,
+    mut animation_player: Query<&mut AnimationPlayer>,
+    query: Query<(Entity, &Transform, &AnimationPlayerEntity, &Player), Without<Dying>>,
+    lava: Query<&Transform, With<Lava>>,
+    animations: Res<PlayerAnimations>,
+    time: Res<Time>,
+) {
+    if let Ok(lava_transform) = lava.get_single() {
+        for (player_entity, player_transform, animation_player_entity, player) in query.iter() {
+            if player_transform.translation.y < lava_transform.translation.y {
+                info!("{player:?} fell into lava!");
+                commands
+                    .entity(player_entity)
+                    .remove::<(Idle, Falling, Moving)>()
+                    .insert(Dying {
+                        start_time: time.elapsed_seconds(),
+                    });
+                let mut animation_player =
+                    animation_player.get_mut(animation_player_entity.0).unwrap();
+                animation_player.play(animations.death.clone_weak());
+            }
+        }
+    }
+}
+
+fn dying(
+    mut commands: Commands,
+    mut query: Query<(
+        Entity,
+        &mut Transform,
+        &AnimationPlayerEntity,
+        &Dying,
+        &Player,
+    )>,
+    mut animation_player: Query<&mut AnimationPlayer>,
+    animations: Res<PlayerAnimations>,
+    time: Res<Time>,
+    blocks: Res<block::Blocks>,
+) {
+    for (entity, mut transform, animation_player_entity, dying, player) in query.iter_mut() {
+        if (time.elapsed_seconds() - dying.start_time) > 2.0 {
+            let mut animation_player = animation_player.get_mut(animation_player_entity.0).unwrap();
+            animation_player.play(animations.idle.clone_weak()).repeat();
+            commands.entity(entity).remove::<Dying>().insert(Idle);
+            animation_player.play(animations.idle.clone_weak()).repeat();
+
+            // select random block in the top-most row
+            let max_y = blocks.coords.iter().map(|((_x, y), _e)| y).max().unwrap();
+            let top_row: Vec<_> = blocks.coords.keys().filter(|(_x, y)| y == max_y).collect();
+            let (x, y) = top_row[rand::thread_rng().gen_range(0..top_row.len())];
+
+            // re-position player
+            let x_offset = match player {
+                Player::Arrows => ARROWS_PLAYER_X_OFFSET,
+                Player::Wasd => WASD_PLAYER_X_OFFSET,
+            };
+            transform.translation.x = *x as f32 + x_offset;
+            transform.translation.y = *y as f32 + 0.5;
+            transform.translation.z = -(*y as f32)
+        }
     }
 }
