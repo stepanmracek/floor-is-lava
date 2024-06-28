@@ -104,19 +104,25 @@ fn camera_follow(
     mut camera_transform: Query<&mut Transform, With<Camera3d>>,
     players_transform: Query<&Transform, (With<player::Player>, Without<Camera3d>)>,
     lava_transform: Query<&Transform, (With<Lava>, Without<Camera3d>)>,
+    time: Res<Time>,
 ) {
     if let Ok(lava_transform) = lava_transform.get_single() {
-        if let Ok(mut camera_transform) = camera_transform.get_single_mut() {
-            let players_transform: Vec<_> =
-                players_transform.iter().map(|t| t.translation).collect();
+        if let Ok(mut t) = camera_transform.get_single_mut() {
+            let players: Vec<_> = players_transform.iter().map(|t| t.translation).collect();
             if players_transform.is_empty() {
                 return;
             }
-            let center = players_transform.iter().sum::<Vec3>() / players_transform.len() as f32;
-            camera_transform.translation.x = -center.x / 2.0;
-            camera_transform.translation.y = 4.5 + lava_transform.translation.y;
-            camera_transform.translation.z = 9.0 - lava_transform.translation.y;
-            camera_transform.look_at(center, Vec3::Y);
+            let center = players.iter().sum::<Vec3>() / players.len() as f32;
+
+            let mut target = t.clone();
+            target.translation.x = -center.x / 2.0;
+            target.translation.y = 4.5 + lava_transform.translation.y;
+            target.translation.z = 9.0 - lava_transform.translation.y;
+            target.look_at(center, Vec3::Y);
+
+            let s = time.delta_seconds() * 2.0;
+            t.translation = t.translation.lerp(target.translation, s);
+            t.rotation = t.rotation.slerp(target.rotation, s);
         }
     }
 }
