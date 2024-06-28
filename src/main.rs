@@ -14,12 +14,15 @@ fn main() {
         })
         .add_plugins((DefaultPlugins, player::PlayersPlugin, block::BlocksPlugin))
         .add_systems(Startup, setup)
-        .add_systems(Update, (raising_lava, camera_follow))
+        .add_systems(Update, (raising_lava, camera_follow, show_score))
         .run();
 }
 
 #[derive(Component)]
 struct Lava;
+
+#[derive(Component)]
+struct ScoreText;
 
 fn setup(
     mut commands: Commands,
@@ -56,12 +59,45 @@ fn setup(
 
     // camera
     commands.spawn(Camera3dBundle { ..default() });
+
+    commands.spawn((
+        TextBundle::from_section(
+            "",
+            TextStyle {
+                font_size: 30.0,
+                ..default()
+            },
+        )
+        .with_style(Style {
+            margin: UiRect::all(Val::Px(5.)),
+            ..default()
+        }),
+        ScoreText,
+    ));
 }
 
 fn raising_lava(time: Res<Time>, mut lava: Query<&mut Transform, With<Lava>>) {
     let mut lava_transform = lava.single_mut();
     lava_transform.translation.y += 0.5 * time.delta_seconds();
     lava_transform.translation.z -= 0.5 * time.delta_seconds();
+}
+
+fn show_score(
+    mut text_query: Query<&mut Text, With<ScoreText>>,
+    score_query: Query<(&player::Score, &player::Player)>,
+) {
+    let mut red = 0;
+    let mut blue = 0;
+    for (score, player) in score_query.iter() {
+        match player {
+            player::Player::Arrows => blue = score.0,
+            player::Player::Wasd => red = score.0,
+        }
+    }
+
+    if let Ok(mut text) = text_query.get_single_mut() {
+        text.sections[0].value = format!("red: {red}\nblue: {blue}");
+    }
 }
 
 fn camera_follow(
