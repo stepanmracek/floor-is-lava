@@ -120,7 +120,6 @@ pub fn ai_control(
         }
 
         let random_index = rand::thread_rng().gen_range(0..possible_directions.len());
-        info!("{} ..... {}", possible_directions.len(), random_index);
         let direction = &possible_directions[random_index];
         apply_move(
             direction,
