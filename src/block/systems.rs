@@ -3,8 +3,8 @@ use rand::Rng;
 
 use crate::block::components::*;
 use crate::block::resources::*;
+use crate::game;
 use crate::player;
-use crate::Lava;
 
 pub fn blocks_init(
     mut commands: Commands,
@@ -46,7 +46,7 @@ pub fn block_in_lava(
     mut commands: Commands,
     mut blocks: ResMut<Blocks>,
     mut score_query: Query<&mut player::components::Score>,
-    lava: Query<&Transform, With<Lava>>,
+    lava: Query<&Transform, With<game::components::Lava>>,
     blocks_query: Query<(Entity, &BlockValue, &BlockOwner, &Transform, &BlockPosition)>,
 ) {
     if let Ok(lava) = lava.get_single() {
@@ -73,7 +73,7 @@ pub fn block_generator(
     mut blocks: ResMut<Blocks>,
     mesh: Res<BlockMesh>,
     block_materials: Res<BlockMaterials>,
-    lava: Query<&Transform, With<Lava>>,
+    lava: Query<&Transform, With<game::components::Lava>>,
 ) {
     if let Ok(lava) = lava.get_single() {
         let max_y = blocks.coords.iter().map(|((_x, y), _ent)| y).max();

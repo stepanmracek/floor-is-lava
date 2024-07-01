@@ -2,11 +2,11 @@ use interpolation::Ease;
 use rand::Rng;
 
 use crate::block;
+use crate::game;
 use crate::player::components::*;
 use crate::player::resources::*;
 use crate::player::*;
 use crate::utils;
-use crate::Lava;
 
 pub fn players_init(mut commands: Commands, asset_server: Res<AssetServer>) {
     commands.insert_resource(PlayerAnimations {
@@ -272,7 +272,7 @@ pub fn lava_contact(
     mut commands: Commands,
     mut animation_player: Query<&mut AnimationPlayer>,
     query: Query<(Entity, &Transform, &AnimationPlayerEntity, &Player), Without<Dying>>,
-    lava: Query<&Transform, With<Lava>>,
+    lava: Query<&Transform, With<game::components::Lava>>,
     animations: Res<PlayerAnimations>,
     time: Res<Time>,
 ) {
