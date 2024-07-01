@@ -134,8 +134,8 @@ pub fn show_score(
     let mut blue = 0;
     for (score, player) in score_query.iter() {
         match player {
-            player::components::Player::Arrows => blue = score.0,
-            player::components::Player::Wasd => red = score.0,
+            player::components::Player::Blue => blue = score.0,
+            player::components::Player::Red => red = score.0,
         }
     }
 

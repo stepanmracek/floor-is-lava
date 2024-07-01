@@ -27,7 +27,7 @@ impl Plugin for PlayersPlugin {
 }
 
 pub const PLAYER_START_Y: f32 = 3.0;
-pub const ARROWS_PLAYER_X_OFFSET: f32 = 0.2;
-pub const ARROWS_PLAYER_START_POS_X: f32 = 1.0;
-pub const WASD_PLAYER_X_OFFSET: f32 = -0.2;
-pub const WASD_PLAYER_START_POS_X: f32 = -1.0;
+pub const BLUE_PLAYER_X_OFFSET: f32 = 0.2;
+pub const BLUE_PLAYER_START_POS_X: f32 = 1.0;
+pub const RED_PLAYER_X_OFFSET: f32 = -0.2;
+pub const RED_PLAYER_START_POS_X: f32 = -1.0;

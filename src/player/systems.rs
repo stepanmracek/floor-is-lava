@@ -19,15 +19,12 @@ pub fn players_init(mut commands: Commands, asset_server: Res<AssetServer>) {
     });
 
     for (player, x) in [
-        (
-            Player::Arrows,
-            ARROWS_PLAYER_START_POS_X + ARROWS_PLAYER_X_OFFSET,
-        ),
-        (Player::Wasd, WASD_PLAYER_START_POS_X + WASD_PLAYER_X_OFFSET),
+        (Player::Blue, BLUE_PLAYER_START_POS_X + BLUE_PLAYER_X_OFFSET),
+        (Player::Red, RED_PLAYER_START_POS_X + RED_PLAYER_X_OFFSET),
     ] {
         let scene = match player {
-            Player::Arrows => asset_server.load("models/megarex/blue.gltf#Scene0"),
-            Player::Wasd => asset_server.load("models/megarex/red.gltf#Scene0"),
+            Player::Blue => asset_server.load("models/megarex/blue.gltf#Scene0"),
+            Player::Red => asset_server.load("models/megarex/red.gltf#Scene0"),
         };
         info!("Scene {}", scene.id());
         let player_id = commands
@@ -99,7 +96,7 @@ pub fn control(
 ) {
     for (entity, mut transform, player, animation_player_entity, speed) in query.iter_mut() {
         let direction = match player {
-            Player::Arrows => {
+            Player::Blue => {
                 if keys.pressed(KeyCode::ArrowRight) {
                     Some(Direction::Right)
                 } else if keys.pressed(KeyCode::ArrowLeft) {
@@ -112,7 +109,7 @@ pub fn control(
                     None
                 }
             }
-            Player::Wasd => {
+            Player::Red => {
                 if keys.pressed(KeyCode::KeyD) {
                     Some(Direction::Right)
                 } else if keys.pressed(KeyCode::KeyA) {
@@ -254,8 +251,8 @@ pub fn color_block(
     if let Ok(mut block_material) = material_query.get_mut(*block_entity) {
         debug!("{block_material:?}");
         let new_material = match player {
-            Player::Wasd => block_materials.red[&block_value.0].clone_weak(),
-            Player::Arrows => block_materials.blue[&block_value.0].clone_weak(),
+            Player::Red => block_materials.red[&block_value.0].clone_weak(),
+            Player::Blue => block_materials.blue[&block_value.0].clone_weak(),
         };
         *block_material = new_material;
         *block_owner = block::components::BlockOwner(Some(*player_entity));
@@ -322,8 +319,8 @@ pub fn dying(
 
             // re-position player
             let x_offset = match player {
-                Player::Arrows => ARROWS_PLAYER_X_OFFSET,
-                Player::Wasd => WASD_PLAYER_X_OFFSET,
+                Player::Blue => BLUE_PLAYER_X_OFFSET,
+                Player::Red => RED_PLAYER_X_OFFSET,
             };
             transform.translation.x = *x as f32 + x_offset;
             transform.translation.y = *y as f32 + 0.5;
