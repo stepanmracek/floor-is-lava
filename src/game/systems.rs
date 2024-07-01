@@ -78,7 +78,8 @@ fn center_text(commands: &mut Commands, value: impl Into<String>, marker: impl C
                         font_size: 30.0,
                         ..default()
                     },
-                ),
+                )
+                .with_text_justify(JustifyText::Center),
                 marker,
             ));
         });
@@ -93,7 +94,11 @@ pub fn start_exit(mut commands: Commands, query: Query<Entity, With<StartText>>)
 }
 
 pub fn pause_entered(mut commands: Commands) {
-    center_text(&mut commands, "Paused, press any key to resume", PauseText);
+    center_text(
+        &mut commands,
+        "Game paused,\npress any key to resume",
+        PauseText,
+    );
 }
 
 pub fn pause_exit(mut commands: Commands, query: Query<Entity, With<PauseText>>) {
@@ -109,10 +114,7 @@ pub fn waiting_for_start(
     }
 }
 
-pub fn maybe_pause(
-    keys: Res<ButtonInput<KeyCode>>,
-    mut next_state: ResMut<NextState<GameState>>,
-) {
+pub fn maybe_pause(keys: Res<ButtonInput<KeyCode>>, mut next_state: ResMut<NextState<GameState>>) {
     if keys.just_pressed(KeyCode::Pause) {
         next_state.set(GameState::Pause);
     }

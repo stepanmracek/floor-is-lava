@@ -20,7 +20,8 @@ impl Plugin for PlayersPlugin {
                 systems::falling,
                 systems::lava_contact,
                 systems::dying,
-            ).run_if(in_state(game::GameState::InGame)),
+            )
+                .run_if(in_state(game::GameState::InGame)),
         );
     }
 }

@@ -11,11 +11,15 @@ pub enum GameState {
     Start,
     InGame,
     Pause,
-    End
+    End,
 }
 
 impl Plugin for GamePlugin {
     fn build(&self, app: &mut App) {
+        app.insert_resource(AmbientLight {
+            color: Color::ORANGE_RED,
+            brightness: 100.0,
+        });
         app.init_state::<GameState>();
         app.add_systems(Startup, systems::setup);
         app.add_systems(

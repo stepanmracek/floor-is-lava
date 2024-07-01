@@ -7,10 +7,6 @@ mod utils;
 
 fn main() {
     App::new()
-        .insert_resource(AmbientLight {
-            color: Color::ORANGE_RED,
-            brightness: 100.,
-        })
         .add_plugins((
             DefaultPlugins,
             player::PlayersPlugin,
