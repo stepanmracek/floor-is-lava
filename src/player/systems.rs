@@ -298,7 +298,6 @@ pub fn moving(
                     &block_materials,
                 );
             } else {
-                // TODO: step outside -> fall
                 info!("{player:?} is falling!");
                 commands
                     .entity(player_entity)
