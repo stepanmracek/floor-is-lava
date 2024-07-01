@@ -1,30 +1,14 @@
-use bevy::prelude::*;
-use interpolation::{self, Ease};
+use interpolation::Ease;
 use rand::Rng;
 
 use crate::block;
+use crate::player::components::*;
+use crate::player::resources::*;
+use crate::player::*;
 use crate::utils;
 use crate::Lava;
 
-pub struct PlayersPlugin;
-
-impl Plugin for PlayersPlugin {
-    fn build(&self, app: &mut App) {
-        app.add_systems(Startup, players_init);
-        app.add_systems(
-            Update,
-            (idle_init, control, movement, falling, lava_contact, dying),
-        );
-    }
-}
-
-pub const PLAYER_START_Y: f32 = 3.0;
-pub const ARROWS_PLAYER_X_OFFSET: f32 = 0.2;
-pub const ARROWS_PLAYER_START_POS_X: f32 = 1.0;
-pub const WASD_PLAYER_X_OFFSET: f32 = -0.2;
-pub const WASD_PLAYER_START_POS_X: f32 = -1.0;
-
-fn players_init(mut commands: Commands, asset_server: Res<AssetServer>) {
+pub fn players_init(mut commands: Commands, asset_server: Res<AssetServer>) {
     commands.insert_resource(PlayerAnimations {
         idle: asset_server.load("models/megarex/scene.gltf#Animation0"),
         run: asset_server.load("models/megarex/scene.gltf#Animation1"),
@@ -69,17 +53,7 @@ fn players_init(mut commands: Commands, asset_server: Res<AssetServer>) {
     }
 }
 
-#[derive(Resource)]
-struct PlayerAnimations {
-    idle: Handle<AnimationClip>,
-    run: Handle<AnimationClip>,
-    win: Handle<AnimationClip>,
-    falling: Handle<AnimationClip>,
-    death: Handle<AnimationClip>,
-    jump: Handle<AnimationClip>,
-}
-
-fn idle_init(
+pub fn idle_init(
     mut commands: Commands,
     animations: Res<PlayerAnimations>,
     parent_query: Query<&Parent>,
@@ -99,47 +73,6 @@ fn idle_init(
     }
 }
 
-#[derive(Component, Debug)]
-pub enum Player {
-    Wasd,
-    Arrows,
-}
-
-#[derive(Component)]
-struct Speed(f32);
-
-#[derive(Component)]
-struct Idle;
-
-#[derive(Component)]
-struct Moving {
-    start_time: f32,
-    source: Vec3,
-    target: Vec3,
-}
-
-#[derive(Component)]
-struct Falling;
-
-#[derive(Component)]
-struct Dying {
-    start_time: f32,
-}
-
-#[derive(Component)]
-struct AnimationPlayerEntity(Entity);
-
-#[derive(Component)]
-pub struct Score(pub u32);
-
-#[derive(Bundle)]
-struct PlayerBundle {
-    scene: SceneBundle,
-    player: Player,
-    speed: Speed,
-    score: Score,
-}
-
 enum Direction {
     Right,
     Left,
@@ -147,7 +80,7 @@ enum Direction {
     Down,
 }
 
-fn control(
+pub fn control(
     mut commands: Commands,
     mut query: Query<
         (
@@ -237,7 +170,7 @@ fn control(
     }
 }
 
-fn movement(
+pub fn movement(
     mut commands: Commands,
     mut query: Query<(
         Entity,
@@ -249,11 +182,14 @@ fn movement(
     )>,
     mut animation_player: Query<&mut AnimationPlayer>,
     mut material_query: Query<&mut Handle<StandardMaterial>>,
-    mut owner_query: Query<(&block::BlockValue, &mut block::BlockOwner)>,
+    mut owner_query: Query<(
+        &block::components::BlockValue,
+        &mut block::components::BlockOwner,
+    )>,
     time: Res<Time>,
     animations: Res<PlayerAnimations>,
-    blocks: Res<block::Blocks>,
-    block_materials: Res<block::BlockMaterials>,
+    blocks: Res<block::resources::Blocks>,
+    block_materials: Res<block::resources::BlockMaterials>,
 ) {
     for (player_entity, speed, mut transform, moving, animation_player_entity, player) in
         query.iter_mut()
@@ -276,7 +212,7 @@ fn movement(
 
                 color_block(
                     &mut owner_query,
-                    &block_entity,
+                    block_entity,
                     &player_entity,
                     player,
                     x,
@@ -300,15 +236,18 @@ fn movement(
     }
 }
 
-fn color_block(
-    owner_query: &mut Query<(&block::BlockValue, &mut block::BlockOwner)>,
+pub fn color_block(
+    owner_query: &mut Query<(
+        &block::components::BlockValue,
+        &mut block::components::BlockOwner,
+    )>,
     block_entity: &Entity,
     player_entity: &Entity,
     player: &Player,
     x: i32,
     y: i32,
     material_query: &mut Query<&mut Handle<StandardMaterial>>,
-    block_materials: &Res<block::BlockMaterials>,
+    block_materials: &Res<block::resources::BlockMaterials>,
 ) {
     let (block_value, mut block_owner) = owner_query.get_mut(*block_entity).unwrap();
     info!("{player_entity:?} -> ({x};{y}) value: {block_value:?}");
@@ -319,17 +258,17 @@ fn color_block(
             Player::Arrows => block_materials.blue[&block_value.0].clone_weak(),
         };
         *block_material = new_material;
-        *block_owner = block::BlockOwner(Some(*player_entity));
+        *block_owner = block::components::BlockOwner(Some(*player_entity));
     }
 }
 
-fn falling(mut query: Query<&mut Transform, With<Falling>>, time: Res<Time>) {
+pub fn falling(mut query: Query<&mut Transform, With<Falling>>, time: Res<Time>) {
     for mut transform in query.iter_mut() {
         transform.translation.y -= 5.0 * time.delta_seconds();
     }
 }
 
-fn lava_contact(
+pub fn lava_contact(
     mut commands: Commands,
     mut animation_player: Query<&mut AnimationPlayer>,
     query: Query<(Entity, &Transform, &AnimationPlayerEntity, &Player), Without<Dying>>,
@@ -355,7 +294,7 @@ fn lava_contact(
     }
 }
 
-fn dying(
+pub fn dying(
     mut commands: Commands,
     mut query: Query<(
         Entity,
@@ -367,7 +306,7 @@ fn dying(
     mut animation_player: Query<&mut AnimationPlayer>,
     animations: Res<PlayerAnimations>,
     time: Res<Time>,
-    blocks: Res<block::Blocks>,
+    blocks: Res<block::resources::Blocks>,
 ) {
     for (entity, mut transform, animation_player_entity, dying, player) in query.iter_mut() {
         if (time.elapsed_seconds() - dying.start_time) > 2.0 {

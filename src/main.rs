@@ -84,14 +84,14 @@ fn raising_lava(time: Res<Time>, mut lava: Query<&mut Transform, With<Lava>>) {
 
 fn show_score(
     mut text_query: Query<&mut Text, With<ScoreText>>,
-    score_query: Query<(&player::Score, &player::Player)>,
+    score_query: Query<(&player::components::Score, &player::components::Player)>,
 ) {
     let mut red = 0;
     let mut blue = 0;
     for (score, player) in score_query.iter() {
         match player {
-            player::Player::Arrows => blue = score.0,
-            player::Player::Wasd => red = score.0,
+            player::components::Player::Arrows => blue = score.0,
+            player::components::Player::Wasd => red = score.0,
         }
     }
 
@@ -102,7 +102,7 @@ fn show_score(
 
 fn camera_follow(
     mut camera_transform: Query<&mut Transform, With<Camera3d>>,
-    players_transform: Query<&Transform, (With<player::Player>, Without<Camera3d>)>,
+    players_transform: Query<&Transform, (With<player::components::Player>, Without<Camera3d>)>,
     lava_transform: Query<&Transform, (With<Lava>, Without<Camera3d>)>,
     time: Res<Time>,
 ) {
@@ -114,7 +114,7 @@ fn camera_follow(
             }
             let center = players.iter().sum::<Vec3>() / players.len() as f32;
 
-            let mut target = t.clone();
+            let mut target = *t;
             target.translation.x = -center.x / 2.0;
             target.translation.y = 4.5 + lava_transform.translation.y;
             target.translation.z = 9.0 - lava_transform.translation.y;
