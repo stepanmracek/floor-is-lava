@@ -15,12 +15,12 @@ impl Plugin for PlayersPlugin {
             Update,
             (
                 systems::idle_init,
-                systems::control.run_if(in_state(game::GameState::InGame)),
+                systems::control,
                 systems::movement,
                 systems::falling,
                 systems::lava_contact,
                 systems::dying,
-            ),
+            ).run_if(in_state(game::GameState::InGame)),
         );
     }
 }
