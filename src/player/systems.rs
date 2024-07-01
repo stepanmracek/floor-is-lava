@@ -75,6 +75,7 @@ pub fn idle_init(
     }
 }
 
+#[derive(Clone)]
 enum Direction {
     Right,
     Left,
@@ -85,53 +86,85 @@ enum Direction {
 fn player_translation_to_position(translation: &Vec3) -> (i32, i32) {
     let x = translation.x.round() as i32;
     let y = (translation.y - 0.5).round() as i32;
-    return (x, y);
+    (x, y)
+}
+
+fn get_ai_direction(
+    x: i32,
+    y: i32,
+    player_entity: Entity,
+    blocks: &block::resources::Blocks,
+    owner_query: &Query<&block::components::BlockOwner>,
+) -> Option<Direction> {
+    let deltas = [
+        (1, 0, Direction::Right),
+        (-1, 0, Direction::Left),
+        (0, 1, Direction::Up),
+        (0, -1, Direction::Down),
+    ];
+
+    let mut possible_directions_enemy = vec![];
+    let mut possible_directions_own = vec![];
+    let mut possible_directions_empty = vec![];
+    for (dx, dy, direction) in deltas.iter() {
+        if let Some(&block_entity) = blocks.coords.get(&(x + dx, y + dy)) {
+            if let Ok(block_owner_component) = owner_query.get(block_entity) {
+                let owner = block_owner_component.0;
+                if let Some(owner_entity) = owner {
+                    if owner_entity != player_entity {
+                        possible_directions_enemy.push(direction);
+                    } else {
+                        possible_directions_own.push(direction);
+                    }
+                } else {
+                    possible_directions_empty.push(direction);
+                }
+            }
+        }
+    }
+
+    for possible_directions in [
+        possible_directions_enemy,
+        possible_directions_empty,
+        possible_directions_own,
+    ] {
+        if !possible_directions.is_empty() {
+            let random_index = rand::thread_rng().gen_range(0..possible_directions.len());
+            return Some(possible_directions[random_index].clone());
+        }
+    }
+
+    None
 }
 
 pub fn ai_control(
     mut commands: Commands,
-    mut query: Query<
+    mut ai_player_query: Query<
         (Entity, &mut Transform, &AnimationPlayerEntity, &Speed),
         (With<Idle>, With<AI>),
     >,
     mut animation_player: Query<&mut AnimationPlayer>,
+    owner_query: Query<&block::components::BlockOwner>,
     time: Res<Time>,
     blocks: Res<block::resources::Blocks>,
     animations: Res<PlayerAnimations>,
 ) {
-    for (entity, transform, animation_player_entity, speed) in query.iter_mut() {
-        let mut possible_directions = vec![];
+    for (entity, transform, animation_player_entity, speed) in ai_player_query.iter_mut() {
         let (x, y) = player_translation_to_position(&transform.translation);
-        if blocks.coords.contains_key(&(x + 1, y)) {
-            possible_directions.push(Direction::Right);
+        let direction = get_ai_direction(x, y, entity, &blocks, &owner_query);
+        if let Some(direction) = direction {
+            apply_move(
+                &direction,
+                transform,
+                &mut commands,
+                entity,
+                &time,
+                &mut animation_player,
+                animation_player_entity,
+                &animations,
+                speed,
+            );
         }
-        if blocks.coords.contains_key(&(x - 1, y)) {
-            possible_directions.push(Direction::Left);
-        }
-        if blocks.coords.contains_key(&(x, y + 1)) {
-            possible_directions.push(Direction::Up);
-        }
-        if blocks.coords.contains_key(&(x, y - 1)) {
-            possible_directions.push(Direction::Down);
-        }
-
-        if possible_directions.is_empty() {
-            break;
-        }
-
-        let random_index = rand::thread_rng().gen_range(0..possible_directions.len());
-        let direction = &possible_directions[random_index];
-        apply_move(
-            direction,
-            transform,
-            &mut commands,
-            entity,
-            &time,
-            &mut animation_player,
-            animation_player_entity,
-            &animations,
-            speed,
-        );
     }
 }
 
