@@ -4,6 +4,8 @@ pub mod components;
 pub mod resources;
 pub mod systems;
 
+use crate::game;
+
 pub struct PlayersPlugin;
 
 impl Plugin for PlayersPlugin {
@@ -13,7 +15,7 @@ impl Plugin for PlayersPlugin {
             Update,
             (
                 systems::idle_init,
-                systems::control,
+                systems::control.run_if(in_state(game::GameState::InGame)),
                 systems::movement,
                 systems::falling,
                 systems::lava_contact,

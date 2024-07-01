@@ -3,6 +3,7 @@ use std::f32::consts::{FRAC_PI_2, PI};
 use bevy::prelude::*;
 
 use crate::game::components::*;
+use crate::game::*;
 use crate::player;
 
 pub fn setup(
@@ -55,6 +56,66 @@ pub fn setup(
         }),
         ScoreText,
     ));
+}
+
+fn center_text(commands: &mut Commands, value: impl Into<String>, marker: impl Component) {
+    commands
+        .spawn(NodeBundle {
+            style: Style {
+                width: Val::Percent(100.0),
+                height: Val::Percent(100.0),
+                align_items: AlignItems::Center,
+                justify_content: JustifyContent::Center,
+                ..default()
+            },
+            ..default()
+        })
+        .with_children(|parent| {
+            parent.spawn((
+                TextBundle::from_section(
+                    value,
+                    TextStyle {
+                        font_size: 30.0,
+                        ..default()
+                    },
+                ),
+                marker,
+            ));
+        });
+}
+
+pub fn start_entered(mut commands: Commands) {
+    center_text(&mut commands, "Press any key to start", StartText);
+}
+
+pub fn start_exit(mut commands: Commands, query: Query<Entity, With<StartText>>) {
+    commands.entity(query.single()).despawn();
+}
+
+pub fn pause_entered(mut commands: Commands) {
+    center_text(&mut commands, "Paused, press any key to resume", PauseText);
+}
+
+pub fn pause_exit(mut commands: Commands, query: Query<Entity, With<PauseText>>) {
+    commands.entity(query.single()).despawn();
+}
+
+pub fn waiting_for_start(
+    keys: Res<ButtonInput<KeyCode>>,
+    mut next_state: ResMut<NextState<GameState>>,
+) {
+    if keys.get_just_pressed().count() > 0 {
+        next_state.set(GameState::InGame);
+    }
+}
+
+pub fn maybe_pause(
+    keys: Res<ButtonInput<KeyCode>>,
+    mut next_state: ResMut<NextState<GameState>>,
+) {
+    if keys.just_pressed(KeyCode::Pause) {
+        next_state.set(GameState::Pause);
+    }
 }
 
 pub fn raising_lava(time: Res<Time>, mut lava: Query<&mut Transform, With<Lava>>) {
