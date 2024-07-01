@@ -27,25 +27,30 @@ pub fn players_init(mut commands: Commands, asset_server: Res<AssetServer>) {
             Player::Red => asset_server.load("models/megarex/red.gltf#Scene0"),
         };
         info!("Scene {}", scene.id());
-        let player_id = commands
-            .spawn((
-                PlayerBundle {
-                    player,
-                    speed: Speed(2.0),
-                    scene: SceneBundle {
-                        scene,
-                        transform: Transform {
-                            translation: (x, 3.5, -3.0).into(),
-                            rotation: Quat::IDENTITY,
-                            scale: (0.2, 0.2, 0.2).into(),
-                        },
-                        ..Default::default()
+
+        let ai = player == Player::Red;
+        let mut entity_commands = commands.spawn((
+            PlayerBundle {
+                player,
+                speed: Speed(2.0),
+                scene: SceneBundle {
+                    scene,
+                    transform: Transform {
+                        translation: (x, 3.5, -3.0).into(),
+                        rotation: Quat::IDENTITY,
+                        scale: (0.2, 0.2, 0.2).into(),
                     },
-                    score: Score(0),
+                    ..Default::default()
                 },
-                Idle,
-            ))
-            .id();
+                score: Score(0),
+            },
+            Idle,
+        ));
+        if ai {
+            entity_commands.insert(AI);
+        }
+
+        let player_id = entity_commands.id();
         info!("Spawned player {:?}", player_id);
     }
 }
@@ -77,7 +82,61 @@ enum Direction {
     Down,
 }
 
-pub fn control(
+fn player_translation_to_position(translation: &Vec3) -> (i32, i32) {
+    let x = translation.x.round() as i32;
+    let y = (translation.y - 0.5).round() as i32;
+    return (x, y);
+}
+
+pub fn ai_control(
+    mut commands: Commands,
+    mut query: Query<
+        (Entity, &mut Transform, &AnimationPlayerEntity, &Speed),
+        (With<Idle>, With<AI>),
+    >,
+    mut animation_player: Query<&mut AnimationPlayer>,
+    time: Res<Time>,
+    blocks: Res<block::resources::Blocks>,
+    animations: Res<PlayerAnimations>,
+) {
+    for (entity, transform, animation_player_entity, speed) in query.iter_mut() {
+        let mut possible_directions = vec![];
+        let (x, y) = player_translation_to_position(&transform.translation);
+        if blocks.coords.contains_key(&(x + 1, y)) {
+            possible_directions.push(Direction::Right);
+        }
+        if blocks.coords.contains_key(&(x - 1, y)) {
+            possible_directions.push(Direction::Left);
+        }
+        if blocks.coords.contains_key(&(x, y + 1)) {
+            possible_directions.push(Direction::Up);
+        }
+        if blocks.coords.contains_key(&(x, y - 1)) {
+            possible_directions.push(Direction::Down);
+        }
+
+        if possible_directions.is_empty() {
+            break;
+        }
+
+        let random_index = rand::thread_rng().gen_range(0..possible_directions.len());
+        info!("{} ..... {}", possible_directions.len(), random_index);
+        let direction = &possible_directions[random_index];
+        apply_move(
+            direction,
+            transform,
+            &mut commands,
+            entity,
+            &time,
+            &mut animation_player,
+            animation_player_entity,
+            &animations,
+            speed,
+        );
+    }
+}
+
+pub fn key_control(
     mut commands: Commands,
     mut query: Query<
         (
@@ -87,14 +146,14 @@ pub fn control(
             &AnimationPlayerEntity,
             &Speed,
         ),
-        With<Idle>,
+        (With<Idle>, Without<AI>),
     >,
     mut animation_player: Query<&mut AnimationPlayer>,
     keys: Res<ButtonInput<KeyCode>>,
     time: Res<Time>,
     animations: Res<PlayerAnimations>,
 ) {
-    for (entity, mut transform, player, animation_player_entity, speed) in query.iter_mut() {
+    for (entity, transform, player, animation_player_entity, speed) in query.iter_mut() {
         let direction = match player {
             Player::Blue => {
                 if keys.pressed(KeyCode::ArrowRight) {
@@ -124,50 +183,73 @@ pub fn control(
             }
         };
 
-        match direction {
-            Some(Direction::Right) => {
-                transform.look_to(-Vec3::X, Vec3::Y);
-                commands.entity(entity).remove::<Idle>().insert(Moving {
-                    source: transform.translation,
-                    target: transform.translation + Vec3::X,
-                    start_time: time.elapsed_seconds(),
-                });
-            }
-            Some(Direction::Left) => {
-                transform.look_to(Vec3::X, Vec3::Y);
-                commands.entity(entity).remove::<Idle>().insert(Moving {
-                    source: transform.translation,
-                    target: transform.translation - Vec3::X,
-                    start_time: time.elapsed_seconds(),
-                });
-            }
-            Some(Direction::Up) => {
-                transform.look_to(Vec3::Z, Vec3::Y);
-                commands.entity(entity).remove::<Idle>().insert(Moving {
-                    source: transform.translation,
-                    target: transform.translation + Vec3::Y - Vec3::Z,
-                    start_time: time.elapsed_seconds(),
-                });
-            }
-            Some(Direction::Down) => {
-                transform.look_to(-Vec3::Z, Vec3::Y);
-                commands.entity(entity).remove::<Idle>().insert(Moving {
-                    source: transform.translation,
-                    target: transform.translation - Vec3::Y + Vec3::Z,
-                    start_time: time.elapsed_seconds(),
-                });
-            }
-            None => {}
-        };
-        if direction.is_some() {
-            let mut animation_player = animation_player.get_mut(animation_player_entity.0).unwrap();
-            animation_player.play(animations.jump.clone_weak());
-            animation_player.set_speed(speed.0);
+        if let Some(direction) = direction {
+            apply_move(
+                &direction,
+                transform,
+                &mut commands,
+                entity,
+                &time,
+                &mut animation_player,
+                animation_player_entity,
+                &animations,
+                speed,
+            );
         }
     }
 }
 
-pub fn movement(
+fn apply_move(
+    direction: &Direction,
+    mut transform: Mut<Transform>,
+    commands: &mut Commands,
+    entity: Entity,
+    time: &Res<Time>,
+    animation_player: &mut Query<&mut AnimationPlayer, ()>,
+    animation_player_entity: &AnimationPlayerEntity,
+    animations: &Res<PlayerAnimations>,
+    speed: &Speed,
+) {
+    match direction {
+        Direction::Right => {
+            transform.look_to(-Vec3::X, Vec3::Y);
+            commands.entity(entity).remove::<Idle>().insert(Moving {
+                source: transform.translation,
+                target: transform.translation + Vec3::X,
+                start_time: time.elapsed_seconds(),
+            });
+        }
+        Direction::Left => {
+            transform.look_to(Vec3::X, Vec3::Y);
+            commands.entity(entity).remove::<Idle>().insert(Moving {
+                source: transform.translation,
+                target: transform.translation - Vec3::X,
+                start_time: time.elapsed_seconds(),
+            });
+        }
+        Direction::Up => {
+            transform.look_to(Vec3::Z, Vec3::Y);
+            commands.entity(entity).remove::<Idle>().insert(Moving {
+                source: transform.translation,
+                target: transform.translation + Vec3::Y - Vec3::Z,
+                start_time: time.elapsed_seconds(),
+            });
+        }
+        Direction::Down => {
+            transform.look_to(-Vec3::Z, Vec3::Y);
+            commands.entity(entity).remove::<Idle>().insert(Moving {
+                source: transform.translation,
+                target: transform.translation - Vec3::Y + Vec3::Z,
+                start_time: time.elapsed_seconds(),
+            });
+        }
+    };
+    let mut animation_player = animation_player.get_mut(animation_player_entity.0).unwrap();
+    animation_player.play(animations.jump.clone_weak());
+    animation_player.set_speed(speed.0);
+}
+
+pub fn moving(
     mut commands: Commands,
     mut query: Query<(
         Entity,
@@ -197,8 +279,7 @@ pub fn movement(
         if moving_progress >= 1.0 {
             transform.translation = moving.target;
 
-            let x = transform.translation.x.round() as i32;
-            let y = (transform.translation.y - 0.5).round() as i32;
+            let (x, y) = player_translation_to_position(&transform.translation);
             let mut animation_player = animation_player.get_mut(animation_player_entity.0).unwrap();
             if let Some(block_entity) = blocks.coords.get(&(x, y)) {
                 commands

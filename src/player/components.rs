@@ -1,6 +1,6 @@
 use bevy::prelude::*;
 
-#[derive(Component, Debug)]
+#[derive(Component, Debug, PartialEq)]
 pub enum Player {
     Red,
     Blue,
@@ -40,3 +40,6 @@ pub struct PlayerBundle {
     pub speed: Speed,
     pub score: Score,
 }
+
+#[derive(Component)]
+pub struct AI;

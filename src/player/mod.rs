@@ -15,8 +15,9 @@ impl Plugin for PlayersPlugin {
             Update,
             (
                 systems::idle_init,
-                systems::control,
-                systems::movement,
+                systems::key_control,
+                systems::ai_control,
+                systems::moving,
                 systems::falling,
                 systems::lava_contact,
                 systems::dying,
